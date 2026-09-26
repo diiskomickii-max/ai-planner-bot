@@ -3,14 +3,9 @@ import time
 import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
-import google.generativeai as genai
 
 TOKEN = os.environ.get("TOKEN", "8814274957:AAHXP4H_2pVRZvwdxWUeTctfTtCM0GDiAZo")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6LYi-J1ae2taXpuYHFf3RyGoEdxYfvSeFnH5SNNuElZSg")
-
-# Настраиваем Gemini
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6KWIf9KQw5T_VpZaLrU3mLvgDg5bLdU5f2JW1LzaaK0LQ")
 
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -24,20 +19,30 @@ def run_web_server():
     server.serve_forever()
 
 def ask_gemini(text):
-    prompt = (
-        "Ты — умный ИИ-помощник для классификации записей. "
-        "Определи категорию (Встреча, Задача, Расход, Еда, Мысль) и структурируй текст:\n\n"
-        f"{text}"
-    )
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {GEMINI_API_KEY}'
+    }
+    data = {
+        "contents": [{
+            "parts": [{"text": f"Ты — умный ИИ-помощник для классификации записей. Определи категорию (Встреча, Задача, Расход, Еда, Мысль) и структурируй текст: {text}"}]
+        }]
+    }
     try:
-        response = model.generate_content(prompt)
-        return response.text
+        response = requests.post(url, headers=headers, json=data)
+        res_json = response.json()
+        
+        if "error" in res_json:
+            return f"Ошибка API: {res_json['error'].get('message', 'Неизвестная ошибка')}"
+            
+        return res_json['candidates'][0]['content']['parts'][0]['text']
     except Exception as e:
-        return f"Ошибка ИИ: {e}"
+        return f"Ошибка соединения: {e}"
 
 def run_telegram_bot():
     offset = 0
-    print("Бот запущен через SDK...")
+    print("Бот запущен...")
     while True:
         try:
             url = f"https://api.telegram.org/bot{TOKEN}/getUpdates?offset={offset}&timeout=30"
@@ -60,7 +65,7 @@ def run_telegram_bot():
                         send_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
                         requests.post(send_url, json={"chat_id": chat_id, "text": reply, "parse_mode": "Markdown"})
         except Exception as e:
-            print(f"Ошибка оглавления Telegram: {e}")
+            print(f"Ошибка Telegram: {e}")
             time.sleep(5)
 
 if __name__ == "__main__":
