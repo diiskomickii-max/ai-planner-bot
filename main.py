@@ -3,11 +3,14 @@ import time
 import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
+import google.generativeai as genai
 
 TOKEN = os.environ.get("TOKEN", "8814274957:AAHXP4H_2pVRZvwdxWUeTctfTtCM0GDiAZo")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6LYi-J1ae2taXpuYHFf3RyGoEdxYfvSeFnH5SNNuElZSg")
-# Используем модель gemini-pro, которая стабильнее работает с регионами
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
+
+# Настраиваем Gemini
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -21,27 +24,20 @@ def run_web_server():
     server.serve_forever()
 
 def ask_gemini(text):
-    headers = {'Content-Type': 'application/json'}
-    data = {
-        "contents": [{
-            "parts": [{"text": f"Ты — умный ИИ-помощник для классификации записей. Определи категорию (Встреча, Задача, Расход, Еда, Мысль) и структурируй текст: {text}"}]
-        }]
-    }
+    prompt = (
+        "Ты — умный ИИ-помощник для классификации записей. "
+        "Определи категорию (Встреча, Задача, Расход, Еда, Мысль) и структурируй текст:\n\n"
+        f"{text}"
+    )
     try:
-        response = requests.post(GEMINI_URL, headers=headers, json=data)
-        res_json = response.json()
-        
-        # Безопасная проверка ответа на наличие ошибок
-        if "error" in res_json:
-            return f"Ошибка API Google: {res_json['error'].get('message', 'Неизвестная ошибка')}"
-            
-        return res_json['candidates'][0]['content']['parts'][0]['text']
+        response = model.generate_content(prompt)
+        return response.text
     except Exception as e:
-        return f"Ошибка соединения с ИИ: {e}"
+        return f"Ошибка ИИ: {e}"
 
 def run_telegram_bot():
     offset = 0
-    print("Бот запущен...")
+    print("Бот запущен через SDK...")
     while True:
         try:
             url = f"https://api.telegram.org/bot{TOKEN}/getUpdates?offset={offset}&timeout=30"
