@@ -3,9 +3,13 @@ import time
 import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
+from google import genai
 
 TOKEN = os.environ.get("TOKEN", "8814274957:AAHXP4H_2pVRZvwdxWUeTctfTtCM0GDiAZo")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6KWIf9KQw5T_VpZaLrU3mLvgDg5bLdU5f2JW1LzaaK0LQ")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6K_c9z6XFpKjJF7rAU5MRxFCXizom1FKRY5kwxQ9aloA")
+
+# Инициализируем новый клиент Google GenAI
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -19,30 +23,24 @@ def run_web_server():
     server.serve_forever()
 
 def ask_gemini(text):
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {GEMINI_API_KEY}'
-    }
-    data = {
-        "contents": [{
-            "parts": [{"text": f"Ты — умный ИИ-помощник для классификации записей. Определи категорию (Встреча, Задача, Расход, Еда, Мысль) и структурируй текст: {text}"}]
-        }]
-    }
+    prompt = (
+        "Ты — умный ИИ-помощник для классификации записей. "
+        "Определи категорию (Встреча, Задача, Расход, Еда, Мысль) и структурируй текст:\n\n"
+        f"{text}"
+    )
     try:
-        response = requests.post(url, headers=headers, json=data)
-        res_json = response.json()
-        
-        if "error" in res_json:
-            return f"Ошибка API: {res_json['error'].get('message', 'Неизвестная ошибка')}"
-            
-        return res_json['candidates'][0]['content']['parts'][0]['text']
+        # Используем современный синтаксис нового SDK
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt,
+        )
+        return response.text
     except Exception as e:
-        return f"Ошибка соединения: {e}"
+        return f"Ошибка ИИ: {e}"
 
 def run_telegram_bot():
     offset = 0
-    print("Бот запущен...")
+    print("Бот запущен с новой библиотекой google-genai...")
     while True:
         try:
             url = f"https://api.telegram.org/bot{TOKEN}/getUpdates?offset={offset}&timeout=30"
