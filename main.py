@@ -6,9 +6,9 @@ from threading import Thread
 
 TOKEN = os.environ.get("TOKEN", "8814274957:AAHXP4H_2pVRZvwdxWUeTctfTtCM0GDiAZo")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6LYi-J1ae2taXpuYHFf3RyGoEdxYfvSeFnH5SNNuElZSg")
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+# Используем модель gemini-pro, которая стабильнее работает с регионами
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
 
-# Веб-сервер для Render Free Tier
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -20,7 +20,6 @@ def run_web_server():
     server = HTTPServer(('0.0.0.0', port), SimpleHandler)
     server.serve_forever()
 
-# Функция отправки запроса к Gemini
 def ask_gemini(text):
     headers = {'Content-Type': 'application/json'}
     data = {
@@ -31,14 +30,18 @@ def ask_gemini(text):
     try:
         response = requests.post(GEMINI_URL, headers=headers, json=data)
         res_json = response.json()
+        
+        # Безопасная проверка ответа на наличие ошибок
+        if "error" in res_json:
+            return f"Ошибка API Google: {res_json['error'].get('message', 'Неизвестная ошибка')}"
+            
         return res_json['candidates'][0]['content']['parts'][0]['text']
     except Exception as e:
-        return f"Ошибка обращения к ИИ: {e}"
+        return f"Ошибка соединения с ИИ: {e}"
 
-# Простой цикл опроса Telegram API (без тяжелых библиотек)
 def run_telegram_bot():
     offset = 0
-    print("Бот запущен через requests...")
+    print("Бот запущен...")
     while True:
         try:
             url = f"https://api.telegram.org/bot{TOKEN}/getUpdates?offset={offset}&timeout=30"
@@ -65,9 +68,6 @@ def run_telegram_bot():
             time.sleep(5)
 
 if __name__ == "__main__":
-    # Запускаем веб-сервер в фоне
     server_thread = Thread(target=run_web_server, daemon=True)
     server_thread.start()
-    
-    # Запускаем бота
     run_telegram_bot()
