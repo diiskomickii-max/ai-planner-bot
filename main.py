@@ -5,10 +5,11 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 from google import genai
 
-TOKEN = os.environ.get("TOKEN", "8814274957:AAHXP4H_2pVRZvwdxWUeTctfTtCM0GDiAZo")
+# Обновленный токен Telegram
+TOKEN = os.environ.get("TOKEN", "8814274957:AAEtuSWcBc2IxnvbUjX8TESDNTtGVNri0")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6K_c9z6XFpKjJF7rAU5MRxFCXizom1FKRY5kwxQ9aloA")
 
-# Инициализируем новый клиент Google GenAI
+# Инициализируем клиент Google GenAI
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 class SimpleHandler(BaseHTTPRequestHandler):
@@ -29,7 +30,6 @@ def ask_gemini(text):
         f"{text}"
     )
     try:
-        # Используем современный синтаксис нового SDK
         response = client.models.generate_content(
             model="gemini-1.5-flash",
             contents=prompt,
@@ -40,7 +40,7 @@ def ask_gemini(text):
 
 def run_telegram_bot():
     offset = 0
-    print("Бот запущен с новой библиотекой google-genai...")
+    print("Бот запущен с новым токеном и google-genai...")
     while True:
         try:
             url = f"https://api.telegram.org/bot{TOKEN}/getUpdates?offset={offset}&timeout=30"
