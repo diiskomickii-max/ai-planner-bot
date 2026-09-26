@@ -1,22 +1,14 @@
-import asyncio
-import logging
 import os
+import time
+import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
-from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import CommandStart
-import google.generativeai as genai
 
 TOKEN = os.environ.get("TOKEN", "8814274957:AAHXP4H_2pVRZvwdxWUeTctfTtCM0GDiAZo")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6LYi-J1ae2taXpuYHFf3RyGoEdxYfvSeFnH5SNNuElZSg")
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
-
-logging.basicConfig(level=logging.INFO)
-bot = Bot(token=TOKEN)
-dp = Dispatcher()
-
+# Веб-сервер для Render Free Tier
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -28,34 +20,54 @@ def run_web_server():
     server = HTTPServer(('0.0.0.0', port), SimpleHandler)
     server.serve_forever()
 
-@dp.message(CommandStart())
-async def cmd_start(message: types.Message):
-    await message.answer(
-        "Привет! Я твой умный планировщик.\n"
-        "Отправь мне задачу, мысль или расход, и я разложу всё по полочкам!"
-    )
-
-@dp.message(F.text)
-async def process_thought(message: types.Message):
-    user_text = message.text
-    prompt = (
-        "Ты — умный ИИ-помощник для классификации записей. "
-        "Проанализируй текст и определи категорию (Встреча, Задача, Расход, Еда, Мысль). "
-        "Выдай ответ в удобном структурированном виде на русском языке.\n\n"
-        f"Текст: {user_text}"
-    )
+# Функция отправки запроса к Gemini
+def ask_gemini(text):
+    headers = {'Content-Type': 'application/json'}
+    data = {
+        "contents": [{
+            "parts": [{"text": f"Ты — умный ИИ-помощник для классификации записей. Определи категорию (Встреча, Задача, Расход, Еда, Мысль) и структурируй текст: {text}"}]
+        }]
+    }
     try:
-        response = model.generate_content(prompt)
-        await message.answer(f"📥 **Результат:**\n\n{response.text}")
+        response = requests.post(GEMINI_URL, headers=headers, json=data)
+        res_json = response.json()
+        return res_json['candidates'][0]['content']['parts'][0]['text']
     except Exception as e:
-        await message.answer(f"Ошибка: {e}")
+        return f"Ошибка обращения к ИИ: {e}"
 
-async def main():
+# Простой цикл опроса Telegram API (без тяжелых библиотек)
+def run_telegram_bot():
+    offset = 0
+    print("Бот запущен через requests...")
+    while True:
+        try:
+            url = f"https://api.telegram.org/bot{TOKEN}/getUpdates?offset={offset}&timeout=30"
+            response = requests.get(url, timeout=35)
+            data = response.json()
+            
+            if data.get("ok"):
+                for update in data.get("result", []):
+                    offset = update["update_id"] + 1
+                    message = update.get("message")
+                    if message and "text" in message:
+                        chat_id = message["chat"]["id"]
+                        user_text = message["text"]
+                        
+                        if user_text.startswith("/start"):
+                            reply = "Привет! Я твой умный планировщик. Напиши задачу или расход, и я разложу всё по полочкам!"
+                        else:
+                            reply = ask_gemini(user_text)
+                        
+                        send_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+                        requests.post(send_url, json={"chat_id": chat_id, "text": reply, "parse_mode": "Markdown"})
+        except Exception as e:
+            print(f"Ошибка оглавления Telegram: {e}")
+            time.sleep(5)
+
+if __name__ == "__main__":
+    # Запускаем веб-сервер в фоне
     server_thread = Thread(target=run_web_server, daemon=True)
     server_thread.start()
     
-    print("Бот запущен...")
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    # Запускаем бота
+    run_telegram_bot()
